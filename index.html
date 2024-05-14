@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cabbage Grading System</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>Cabbage Grading System</h1>
+
+    <section id="cabbageForm">
+        <h2>Add a Cabbage</h2>
+        <form id="addCabbageForm">
+            <label for="cabbageWeight">Weight (g):</label>
+            <input type="number" id="cabbageWeight" name="cabbageWeight" required><br><br>
+            <label for="cabbageColor">Color:</label>
+            <input type="text" id="cabbageColor" name="cabbageColor" required><br><br>
+            <button type="submit">Add Cabbage</button>
+        </form>
+    </section>
+
+    <section id="editCabbageForm">
+        <h2>Edit a Cabbage</h2>
+        <form id="editCabbageForm">
+            <label for="editCabbageId">Enter ID:</label>
+            <input type="number" id="editCabbageId" name="editCabbageId" required><br><br>
+            <label for="editCabbageWeight">Weight (g):</label>
+            <input type="number" id="editCabbageWeight" name="editCabbageWeight" required><br><br>
+            <label for="editCabbageColor">Color:</label>
+            <input type="text" id="editCabbageColor" name="editCabbageColor" required><br><br>
+            <button type="button" onclick="saveCabbageDetails()">Save</button>
+        </form>
+    </section>
+
+    <section id="cabbageList">
+        <h2>All Cabbages</h2>
+        <table id="cabbageTable">
+            <thead>
+                <tr>
+                    <th>Cabbage ID</th>
+                    <th>Grade</th>
+                    <th>Weight (g)</th>
+                    <th>Quality</th>
+                    <th> </th>
+                </tr>
+            </thead>
+            <tbody id="cabbageTableBody">
+            </tbody>
+        </table>
+    </section>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+
+            const response = await fetch('/cabbages');
+            const cabbageData = await response.json();
+            
+            const cabbageTableBody = document.getElementById('cabbageTableBody');
+            cabbageData.forEach(cabbage => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${cabbage.ID}</td>
+                    <td>${cabbage.CabbageGrade}</td>
+                    <td>${cabbage.CabbageWeight}</td>
+                    <td>${calculateCabbageQuality(cabbage.CabbageGrade)}</td>
+                    <td><button onclick="deleteCabbage(${cabbage.ID})">Delete</button></td>
+                `;
+                cabbageTableBody.appendChild(row);
+            });
+        });
+    
+        document.getElementById('addCabbageForm').addEventListener('submit', async (event) => {
+            event.preventDefault(); 
+            const weight = document.getElementById('cabbageWeight').value;
+            const color = document.getElementById('cabbageColor').value;
+    
+            try {
+                const response = await fetch('/cabbages', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ weight, color })
+                });
+                if (response.ok) {
+                    console.log('Cabbage added successfully');
+                    location.reload();
+                } else {
+                    const errorMessage = await response.text();
+                    alert(errorMessage); 
+                    console.error('Failed to add cabbage:', errorMessage);
+                }
+            } catch (error) {
+                console.error('Error adding cabbage:', error.message);
+            }
+        });
+    
+        async function deleteCabbage(cabbageId) {
+            try {
+                const response = await fetch(`/cabbages/${cabbageId}`, {
+                    method: 'DELETE'
+                });
+                if (response.ok) {
+                    console.log('Cabbage deleted successfully');
+                    location.reload(); 
+                } else {
+                    const errorMessage = await response.text();
+                    console.error('Failed to delete cabbage:', errorMessage);
+                }
+            } catch (error) {
+                console.error('Error deleting cabbage:', error.message);
+            }
+        }
+    
+        async function saveCabbageDetails() {
+            console.log('Save button clicked'); 
+            const cabbageId = document.getElementById('editCabbageId').value;
+            const weight = document.getElementById('editCabbageWeight').value;
+            const color = document.getElementById('editCabbageColor').value;
+            
+            try {
+                console.log('Attempting to send PUT request'); 
+                const response = await fetch(`/cabbages/${cabbageId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ weight, color })
+                });
+                console.log('Response received:', response); 
+                if (response.ok) {
+                    console.log('Cabbage details updated successfully');
+                    location.reload(); 
+                } else {
+                    const errorMessage = await response.text();
+                    console.error('Failed to update cabbage details:', errorMessage);
+                }
+            } catch (error) {
+                console.error('Error updating cabbage details:', error.message);
+            }
+        }
+    
+        function calculateCabbageQuality(grade) {
+            switch (grade) {
+                case 'A':
+                    return 'Good';
+                case 'B':
+                    return 'Fair';
+                case 'C':
+                    return 'Bad';
+                default:
+                    return 'Unknown';
+            }
+        }
+    </script>    
+    
+</body>
+</html>

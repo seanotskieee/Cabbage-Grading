@@ -1,159 +1,127 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cabbage Grading System</title>
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
-    <h1>Cabbage Grading System</h1>
+const express = require('express');
+const mysql = require('mysql');
+const path = require('path');
 
-    <section id="cabbageForm">
-        <h2>Add a Cabbage</h2>
-        <form id="addCabbageForm">
-            <label for="cabbageWeight">Weight (g):</label>
-            <input type="number" id="cabbageWeight" name="cabbageWeight" required><br><br>
-            <label for="cabbageColor">Color:</label>
-            <input type="text" id="cabbageColor" name="cabbageColor" required><br><br>
-            <button type="submit">Add Cabbage</button>
-        </form>
-    </section>
+const app = express();
+const port = process.env.PORT || 3000;
 
-    <section id="editCabbageForm">
-        <h2>Edit a Cabbage</h2>
-        <form id="editCabbageForm">
-            <label for="editCabbageId">Enter ID:</label>
-            <input type="number" id="editCabbageId" name="editCabbageId" required><br><br>
-            <label for="editCabbageWeight">Weight (g):</label>
-            <input type="number" id="editCabbageWeight" name="editCabbageWeight" required><br><br>
-            <label for="editCabbageColor">Color:</label>
-            <input type="text" id="editCabbageColor" name="editCabbageColor" required><br><br>
-            <button type="button" onclick="saveCabbageDetails()">Save</button>
-        </form>
-    </section>
+const connection = mysql.createConnection({
+    host: '127.0.0.1',
+    user: 'root',
+    password: '',
+    port: 3306,
+    database: 'cabbage_grading'
+});
 
-    <section id="cabbageList">
-        <h2>All Cabbages</h2>
-        <table id="cabbageTable">
-            <thead>
-                <tr>
-                    <th>Cabbage ID</th>
-                    <th>Grade</th>
-                    <th>Weight (g)</th>
-                    <th>Quality</th>
-                    <th> </th>
-                </tr>
-            </thead>
-            <tbody id="cabbageTableBody">
-            </tbody>
-        </table>
-    </section>
+connection.connect(err => {
+    if (err) {
+        console.error('Error connecting to MySQL database:', err.stack);
+        return;
+    }
+    console.log('Connected to MySQL database');
+});
 
-    <script>
-        document.addEventListener('DOMContentLoaded', async () => {
+app.use(express.json());
+app.use(express.static(__dirname));
 
-            const response = await fetch('/cabbages');
-            const cabbageData = await response.json();
-            
-            const cabbageTableBody = document.getElementById('cabbageTableBody');
-            cabbageData.forEach(cabbage => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${cabbage.ID}</td>
-                    <td>${cabbage.CabbageGrade}</td>
-                    <td>${cabbage.CabbageWeight}</td>
-                    <td>${calculateCabbageQuality(cabbage.CabbageGrade)}</td>
-                    <td><button onclick="deleteCabbage(${cabbage.ID})">Delete</button></td>
-                `;
-                cabbageTableBody.appendChild(row);
-            });
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+
+app.get('/cabbages', (req, res) => {
+    connection.query('SELECT * FROM Cabbage', (error, results) => {
+        if (error) {
+            console.error('Error retrieving cabbages:', error.stack);
+            res.status(500).send('Error retrieving cabbages from the database');
+            return;
+        }
+
+        const cabbagesWithQuality = results.map(cabbage => ({
+            ...cabbage,
+            CabbageQuality: calculateCabbageQuality(cabbage.CabbageGrade)
+        }));
+
+        res.json(cabbagesWithQuality);
+    });
+});
+
+app.post('/cabbages', (req, res) => {
+    const { weight, color } = req.body;
+    const grade = determineGrade(color);
+
+    if (grade.startsWith('Error')) {
+        return res.status(400).send('Invalid cabbage color');
+    }
+
+    const quality = calculateCabbageQuality(grade);
+
+    connection.query('INSERT INTO Cabbage (CabbageGrade, CabbageWeight, CabbageColor, CabbageQuality) VALUES (?, ?, ?, ?)', [grade, weight, color, quality], (error) => {
+        if (error) {
+            console.error('Error adding cabbage:', error.stack);
+            res.status(500).send('Error adding cabbage to the database');
+            return;
+        }
+        res.sendStatus(201);
+    });
+});
+
+app.delete('/cabbages/:id', (req, res) => {
+    const { id } = req.params;
+
+    connection.query('DELETE FROM Cabbage WHERE ID = ?', [id], (error) => {
+        if (error) {
+            console.error('Error deleting cabbage:', error.stack);
+            res.status(500).send('Error deleting cabbage from the database');
+            return;
+        }
+        res.sendStatus(200);
+    });
+});
+
+app.put('/cabbages/:id', (req, res) => {
+    const { id } = req.params;
+    const { weight, color } = req.body;
+    const grade = determineGrade(color);
+
+    if (grade.startsWith('Error')) {
+        return res.status(400).send('Invalid cabbage color');
+    }
+
+    const quality = calculateCabbageQuality(grade);
+
+    connection.query('UPDATE Cabbage SET CabbageWeight = ?, CabbageColor = ?, CabbageQuality = ?, CabbageGrade = ? WHERE ID = ?', [weight, color, quality, grade, id], (error) => {
+        if (error) {
+            console.error('Error updating cabbage:', error.stack);
+            res.status(500).send('Error updating cabbage details in the database');
+            return;
+        }
+
+        connection.query('SELECT * FROM Cabbage WHERE ID = ?', [id], (error, results) => {
+            if (error) {
+                console.error('Error retrieving updated cabbage:', error.stack);
+                res.status(500).send('Error retrieving updated cabbage from the database');
+                return;
+            }
+
+            if (results.length === 0) {
+                res.status(404).send('Updated cabbage not found in the database');
+                return;
+            }
+
+            res.json(results[0]);
         });
-    
-        document.getElementById('addCabbageForm').addEventListener('submit', async (event) => {
-            event.preventDefault(); 
-            const weight = document.getElementById('cabbageWeight').value;
-            const color = document.getElementById('cabbageColor').value;
-    
-            try {
-                const response = await fetch('/cabbages', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ weight, color })
-                });
-                if (response.ok) {
-                    console.log('Cabbage added successfully');
-                    location.reload();
-                } else {
-                    const errorMessage = await response.text();
-                    alert(errorMessage); 
-                    console.error('Failed to add cabbage:', errorMessage);
-                }
-            } catch (error) {
-                console.error('Error adding cabbage:', error.message);
-            }
-        });
-    
-        async function deleteCabbage(cabbageId) {
-            try {
-                const response = await fetch(`/cabbages/${cabbageId}`, {
-                    method: 'DELETE'
-                });
-                if (response.ok) {
-                    console.log('Cabbage deleted successfully');
-                    location.reload(); 
-                } else {
-                    const errorMessage = await response.text();
-                    console.error('Failed to delete cabbage:', errorMessage);
-                }
-            } catch (error) {
-                console.error('Error deleting cabbage:', error.message);
-            }
-        }
-    
-        async function saveCabbageDetails() {
-            console.log('Save button clicked'); 
-            const cabbageId = document.getElementById('editCabbageId').value;
-            const weight = document.getElementById('editCabbageWeight').value;
-            const color = document.getElementById('editCabbageColor').value;
-            
-            try {
-                console.log('Attempting to send PUT request'); 
-                const response = await fetch(`/cabbages/${cabbageId}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ weight, color })
-                });
-                console.log('Response received:', response); 
-                if (response.ok) {
-                    console.log('Cabbage details updated successfully');
-                    location.reload(); 
-                } else {
-                    const errorMessage = await response.text();
-                    console.error('Failed to update cabbage details:', errorMessage);
-                }
-            } catch (error) {
-                console.error('Error updating cabbage details:', error.message);
-            }
-        }
-    
-        function calculateCabbageQuality(grade) {
-            switch (grade) {
-                case 'A':
-                    return 'Good';
-                case 'B':
-                    return 'Fair';
-                case 'C':
-                    return 'Bad';
-                default:
-                    return 'Unknown';
-            }
-        }
-    </script>    
-    
-</body>
-</html>
+    });
+});
+
+function determineGrade(color) {
+    const lowerColor = color.toLowerCase();
+    if (lowerColor === 'green') return 'A';
+    if (lowerColor === 'yellow') return 'C';
+    if (lowerColor.includes('yellow-green') || lowerColor.includes('green-yellow')) return 'B';
+    return 'Error, cabbage color does not exist';
+}
+
+function calculateCabbageQuality(grade) {
+    const qualities = { A: 'Good', B: 'Fair', C: 'Bad' };
+    return qualities[grade] || 'Unknown';
+}
+
+app.listen(port, () => console.log(`Server is running on http://localhost:${port}`));

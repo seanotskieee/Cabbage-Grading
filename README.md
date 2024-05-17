@@ -3,3 +3,4 @@
 3. On your VS Code Terminal, run 'npm install mysql2' to install the MySQL2 package.
 4. Import the files 'index.html', 'style.css', and 'server.js', to your project folder on VS Code.
 5. After creating the necessary files, run 'node server.js' on your VS Code terminal to run the website in a localhost.
+6. Enjoy!
